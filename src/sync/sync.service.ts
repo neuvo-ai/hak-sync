@@ -101,7 +101,8 @@ export class SyncService {
     const incidents = await this.getIncidents();
     for (const incident of incidents) {
       // Fetch survivors
-      incident.survivors = survivors.filter((s) => s.case_id == incident.id);
+      // TODO: this was used before to get an array but since there is just one survivor per incident, this should be done as a JOIN instead
+      incident.survivor = survivors.find((s) => s.case_id == incident.id);
 
       // Remove nulls
       ['nature_of_violences', 'survivor_statuses'].forEach(
