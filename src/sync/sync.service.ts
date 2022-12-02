@@ -269,31 +269,41 @@ export class SyncService {
 
   public async uploadData(data) {
     return this.httpService.post(
-      `${process.env.NEUVO_STATS_API}/external/hak/sync/data`,
+      `${process.env.NEUVO_STATS_API}/external/sync/data`,
       {
         apiKey: process.env.NEUVO_SECRET,
         name: 'hak',
         data,
       },
+    ).pipe(
+      catchError((e) => {
+        this.logger.error(e.response.data);
+        throw 'Error uploading data!';
+      }),
     );
   }
 
   public async uploadMeta(data) {
     return this.httpService.post(
-      `${process.env.NEUVO_STATS_API}/external/hak/sync/meta`,
+      `${process.env.NEUVO_STATS_API}/external/sync/meta`,
       {
         apiKey: process.env.NEUVO_SECRET,
         name: 'hak',
         data,
       },
+    ).pipe(
+      catchError((e) => {
+        this.logger.error(e.response.data);
+        throw 'Error uploading meta data!';
+      }),
     );
   }
 
-  public async updateLastSync() {
+  public async updateLastSync(type: 'meta' | 'data' = 'meta') {
     this.logger.log('Updating last sync');
     const { data } = await firstValueFrom(
       this.httpService
-        .get<any>(`${process.env.NEUVO_STATS_API}/external/hak/sync/last`)
+        .get<any>(`${process.env.NEUVO_STATS_API}/external/sync/last`, { params: { type, name: 'hak' } })
         .pipe(
           catchError((e) => {
             this.logger.error(e.response.data);
@@ -302,8 +312,11 @@ export class SyncService {
         ),
     );
     this.logger.debug(data);
-    this.lastSyncIncidents = new Date(data.lastSyncIncidents);
-    this.lastSyncMeta = new Date(data.lastSyncMeta);
+    if(type == 'data') {
+      this.lastSyncIncidents = new Date(data.date);
+    } else {
+      this.lastSyncMeta = new Date(data.date);
+    }
   }
 
   public async sync() {
@@ -313,11 +326,13 @@ export class SyncService {
     }
     this.syncing = true;
     this.logger.log('Syncing data');
-    await this.updateLastSync();
+    await this.updateLastSync('data');
     const data = await this.getData();
     await this.uploadData(data);
+    await this.updateLastSync('meta');
     const meta = await this.getMeta();
     await this.uploadMeta(meta);
     this.syncing = false;
+    this.logger.verbose('Done syncing');
   }
 }
