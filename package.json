@@ -1,7 +1,7 @@
 {
   "name": "hak-sync",
   "private": true,
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Neuvo Inc. Global synchronization daemon for HAK",
   "license": "PRIVATE/GPLv2",
   "scripts": {
