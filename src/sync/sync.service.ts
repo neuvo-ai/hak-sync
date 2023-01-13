@@ -67,7 +67,36 @@ export class SyncService {
       LEFT JOIN gbv_nature_of_violences ON gbv_nature_of_violences.case_id = gbv_incident_reports.id
       LEFT JOIN gbv_survivor_statuses ON gbv_survivor_statuses.case_id = gbv_incident_reports.id
       WHERE gbv_incident_reports.updated_at > ?
-      GROUP BY gbv_nature_of_violences.case_id, gbv_survivor_statuses.case_id
+      GROUP BY
+        gbv_nature_of_violences.case_id,
+        gbv_survivor_statuses.case_id,
+
+        gbv_incident_reports.id,
+        gbv_incident_reports.client_referred,
+        gbv_incident_reports.survivor_access_justice,
+        gbv_incident_reports.survivor_status_id, # AGG
+        gbv_incident_reports.crisis_related_survivor_status_id,
+        gbv_incident_reports.health_state_id,
+        gbv_incident_reports.gbv_related_case,
+        gbv_incident_reports.type_of_non_gbv_related,
+        gbv_incident_reports.non_intervention,
+        gbv_incident_reports.incident_date,
+        gbv_incident_reports.category_id,
+        gbv_incident_reports.sub_category_id,
+        gbv_incident_reports.gbv_crisis_id,
+        gbv_incident_reports.place_of_incident_id,
+        gbv_incident_reports.details_of_incident_id,
+        gbv_incident_reports.has_vulnerability,
+        gbv_incident_reports.survivor_emotional_state_start_id,
+        gbv_incident_reports.survivor_emotional_state_end_id,
+        gbv_incident_reports.client_safe,
+        gbv_incident_reports.explained_possible_consequence,
+        gbv_incident_reports.client_consent_share_data,
+        gbv_incident_reports.tlc_id,
+        gbv_incident_reports.status,
+        gbv_incident_reports.created_at,
+        gbv_incident_reports.updated_at,
+        gbv_nature_of_violences.nature_of_violence_id
       LIMIT 1000
       `,
       [this.lastSyncIncidents],
@@ -278,7 +307,7 @@ export class SyncService {
       },
     ).pipe(
       catchError((e) => {
-        this.logger.error(e.response.data);
+        this.logger.error(e.response?.data);
         throw 'Error uploading data!';
       }),
     );
@@ -294,7 +323,7 @@ export class SyncService {
       },
     ).pipe(
       catchError((e) => {
-        this.logger.error(e.response.data);
+        this.logger.error(e.response?.data);
         throw 'Error uploading meta data!';
       }),
     );
@@ -307,7 +336,7 @@ export class SyncService {
         .get<any>(`${process.env.NEUVO_STATS_API}/external/sync/last`, { params: { type, name: 'hak' } })
         .pipe(
           catchError((e) => {
-            this.logger.error(e.response.data);
+            this.logger.error(e.response?.data);
             throw 'Error fetching last sync dates!';
           }),
         ),
