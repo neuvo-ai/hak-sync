@@ -200,12 +200,12 @@ export class SyncService {
 
     const counties = await this.getCounties();
 
-    output['counties'] = counties.map(
-      (county) =>
-        (county.subcounties = subCounties.filter(
-          (subCounty) => subCounty.county_id === county.id,
-        )),
-    );
+    output['counties'] = counties.map((county) => {
+      county.subcounties = subCounties.filter(
+        (subCounty) => subCounty.county_id === county.id,
+      );
+      return county;
+    });
 
     for (const [table, tableConfig] of Object.entries(tablesConfig)) {
       const config = [...globalTableConfig];
