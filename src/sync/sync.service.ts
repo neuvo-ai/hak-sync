@@ -1,9 +1,8 @@
-import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, Timeout } from '@nestjs/schedule';
-import { catchError, firstValueFrom } from 'rxjs';
 import { InjectClient } from 'nest-mysql';
 import { Connection } from 'mysql2';
+import axios from 'axios';
 
 @Injectable()
 export class SyncService {
@@ -13,10 +12,7 @@ export class SyncService {
   public healthy = false;
   public syncing = false;
 
-  constructor(
-    @InjectClient() private readonly connection: Connection,
-    private readonly httpService: HttpService,
-  ) {}
+  constructor(@InjectClient() private readonly connection: Connection) {}
 
   @Cron('0 0 * * * *')
   handleCron() {
@@ -33,92 +29,89 @@ export class SyncService {
     // Get the latest incidents with a limit
     const incidents = await this.connection.query(
       `SELECT
-        gbv_incident_reports.id,
-        gbv_incident_reports.client_referred,
-        gbv_incident_reports.survivor_access_justice,
-        gbv_incident_reports.survivor_status_id, # AGG
-        gbv_incident_reports.crisis_related_survivor_status_id,
-        gbv_incident_reports.health_state_id,
-        gbv_incident_reports.gbv_related_case,
-        gbv_incident_reports.type_of_non_gbv_related,
-        gbv_incident_reports.non_intervention,
-        gbv_incident_reports.incident_date,
-        gbv_incident_reports.category_id,
-        gbv_incident_reports.sub_category_id,
-        gbv_incident_reports.gbv_crisis_id,
-        gbv_incident_reports.place_of_incident_id,
-        gbv_incident_reports.details_of_incident_id,
-        gbv_incident_reports.has_vulnerability,
-        gbv_incident_reports.survivor_emotional_state_start_id,
-        gbv_incident_reports.survivor_emotional_state_end_id,
-        gbv_incident_reports.client_safe,
-        gbv_incident_reports.explained_possible_consequence,
-        gbv_incident_reports.client_consent_share_data,
-        gbv_incident_reports.tlc_id,
-        gbv_incident_reports.status,
-        gbv_incident_reports.created_at,
-        gbv_incident_reports.updated_at,
-        gbv_nature_of_violences.nature_of_violence_id, # AGG
+      gbv_incident_reports.id,
+      gbv_incident_reports.client_referred,
+      gbv_incident_reports.survivor_access_justice,
+      gbv_incident_reports.survivor_status_id, # AGG
+      gbv_incident_reports.crisis_related_survivor_status_id,
+      gbv_incident_reports.health_state_id,
+      gbv_incident_reports.gbv_related_case,
+      gbv_incident_reports.type_of_non_gbv_related,
+      gbv_incident_reports.non_intervention,
+      gbv_incident_reports.incident_date,
+      gbv_incident_reports.category_id,
+      gbv_incident_reports.sub_category_id,
+      gbv_incident_reports.gbv_crisis_id,
+      gbv_incident_reports.place_of_incident_id,
+      gbv_incident_reports.details_of_incident_id,
+      gbv_incident_reports.has_vulnerability,
+      gbv_incident_reports.survivor_emotional_state_start_id,
+      gbv_incident_reports.survivor_emotional_state_end_id,
+      gbv_incident_reports.client_safe,
+      gbv_incident_reports.explained_possible_consequence,
+      gbv_incident_reports.client_consent_share_data,
+      gbv_incident_reports.tlc_id,
+      gbv_incident_reports.status,
+      gbv_incident_reports.created_at,
+      gbv_incident_reports.updated_at,
       
-        JSON_ARRAYAGG(gbv_nature_of_violences.nature_of_violence_id) as nature_of_violences,
-        JSON_ARRAYAGG(gbv_survivor_statuses.survivor_status_id) as survivor_statuses
+      # Survivor data
+      gbv_survivors_datas.age_estimate,
+      gbv_survivors_datas.gender,
+      gbv_survivors_datas.county_id,
+      gbv_survivors_datas.sub_county_id,
+      gbv_survivors_datas.ward_id,
       
-      FROM gbv_incident_reports
-      LEFT JOIN gbv_nature_of_violences ON gbv_nature_of_violences.case_id = gbv_incident_reports.id
-      LEFT JOIN gbv_survivor_statuses ON gbv_survivor_statuses.case_id = gbv_incident_reports.id
-      WHERE gbv_incident_reports.updated_at > ?
-      GROUP BY
-        gbv_nature_of_violences.case_id,
-        gbv_survivor_statuses.case_id,
+      gbv_nature_of_violences.nature_of_violence_id, # AGG
+    
+      JSON_ARRAYAGG(gbv_nature_of_violences.nature_of_violence_id) as nature_of_violences,
+      JSON_ARRAYAGG(gbv_survivor_statuses.survivor_status_id) as survivor_statuses
+    
+    FROM gbv_incident_reports
+    LEFT JOIN gbv_nature_of_violences ON gbv_nature_of_violences.case_id = gbv_incident_reports.id
+    LEFT JOIN gbv_survivor_statuses ON gbv_survivor_statuses.case_id = gbv_incident_reports.id
+    LEFT JOIN gbv_survivors_datas ON gbv_survivors_datas.case_id = gbv_incident_reports.id
+    WHERE gbv_incident_reports.updated_at > "2000-01-01 00:00:00"
+    GROUP BY
+      gbv_nature_of_violences.case_id,
+      gbv_survivor_statuses.case_id,
 
-        gbv_incident_reports.id,
-        gbv_incident_reports.client_referred,
-        gbv_incident_reports.survivor_access_justice,
-        gbv_incident_reports.survivor_status_id, # AGG
-        gbv_incident_reports.crisis_related_survivor_status_id,
-        gbv_incident_reports.health_state_id,
-        gbv_incident_reports.gbv_related_case,
-        gbv_incident_reports.type_of_non_gbv_related,
-        gbv_incident_reports.non_intervention,
-        gbv_incident_reports.incident_date,
-        gbv_incident_reports.category_id,
-        gbv_incident_reports.sub_category_id,
-        gbv_incident_reports.gbv_crisis_id,
-        gbv_incident_reports.place_of_incident_id,
-        gbv_incident_reports.details_of_incident_id,
-        gbv_incident_reports.has_vulnerability,
-        gbv_incident_reports.survivor_emotional_state_start_id,
-        gbv_incident_reports.survivor_emotional_state_end_id,
-        gbv_incident_reports.client_safe,
-        gbv_incident_reports.explained_possible_consequence,
-        gbv_incident_reports.client_consent_share_data,
-        gbv_incident_reports.tlc_id,
-        gbv_incident_reports.status,
-        gbv_incident_reports.created_at,
-        gbv_incident_reports.updated_at,
-        gbv_nature_of_violences.nature_of_violence_id
-      LIMIT 1000
-      `,
-      [this.lastSyncIncidents],
-    );
-    return incidents[0];
-  }
-
-  public async getSurvivors() {
-    const incidents = await this.connection.query(
-      `SELECT
-        gbv_survivors_datas.age_estimate,
-        gbv_survivors_datas.gender,
-        gbv_survivors_datas.county_id,
-        gbv_survivors_datas.sub_county_id,
-        gbv_survivors_datas.ward_id,
-        gbv_survivors_datas.created_at,
-        gbv_survivors_datas.updated_at,
-        gbv_survivors_datas.case_id
-      FROM gbv_survivors_datas
-      RIGHT JOIN gbv_incident_reports ON gbv_incident_reports.id = gbv_survivors_datas.case_id
-      WHERE gbv_incident_reports.updated_at > ?
-      LIMIT 50000 # We can not be sure about the limit but it is directly limited by the incidents so this is a safety value
+      gbv_incident_reports.id,
+      gbv_incident_reports.client_referred,
+      gbv_incident_reports.survivor_access_justice,
+      gbv_incident_reports.survivor_status_id, # AGG
+      gbv_incident_reports.crisis_related_survivor_status_id,
+      gbv_incident_reports.health_state_id,
+      gbv_incident_reports.gbv_related_case,
+      gbv_incident_reports.type_of_non_gbv_related,
+      gbv_incident_reports.non_intervention,
+      gbv_incident_reports.incident_date,
+      gbv_incident_reports.category_id,
+      gbv_incident_reports.sub_category_id,
+      gbv_incident_reports.gbv_crisis_id,
+      gbv_incident_reports.place_of_incident_id,
+      gbv_incident_reports.details_of_incident_id,
+      gbv_incident_reports.has_vulnerability,
+      gbv_incident_reports.survivor_emotional_state_start_id,
+      gbv_incident_reports.survivor_emotional_state_end_id,
+      gbv_incident_reports.client_safe,
+      gbv_incident_reports.explained_possible_consequence,
+      gbv_incident_reports.client_consent_share_data,
+      gbv_incident_reports.tlc_id,
+      gbv_incident_reports.status,
+      gbv_incident_reports.created_at,
+      gbv_incident_reports.updated_at,
+      gbv_survivors_datas.age_estimate,
+      gbv_survivors_datas.gender,
+      gbv_survivors_datas.county_id,
+      gbv_survivors_datas.sub_county_id,
+      gbv_survivors_datas.ward_id,
+      gbv_survivors_datas.created_at,
+      gbv_survivors_datas.updated_at,
+      gbv_survivors_datas.case_id,
+      gbv_nature_of_violences.nature_of_violence_id
+    ORDER BY gbv_incident_reports.updated_at
+    LIMIT 500
       `,
       [this.lastSyncIncidents],
     );
@@ -126,13 +119,8 @@ export class SyncService {
   }
 
   public async getData() {
-    const survivors = await this.getSurvivors();
     const incidents = await this.getIncidents();
     for (const incident of incidents) {
-      // Fetch survivors
-      // TODO: this was used before to get an array but since there is just one survivor per incident, this should be done as a JOIN instead
-      incident.survivor = survivors.find((s) => s.case_id == incident.id);
-
       // Remove nulls
       ['nature_of_violences', 'survivor_statuses'].forEach(
         (k) => (incident[k] = incident[k].filter((v) => v)),
@@ -161,6 +149,8 @@ export class SyncService {
       crisis_related_survivor_statuses: [],
       displacement_statuses: [],
       domestic_relations: [],
+      case_categories: [],
+      case_sub_categories: ['-name', 'sub_category_name', 'case_category_id'],
       gbvrc_contacts: [
         '-name',
         'gbv_name',
@@ -267,6 +257,7 @@ export class SyncService {
         sub_counties.updated_at
       FROM sub_counties
       WHERE sub_counties.updated_at > ?
+      ORDER BY sub_counties.updated_at
       LIMIT 5000
       `,
       [this.lastSyncMeta],
@@ -290,7 +281,8 @@ export class SyncService {
         ${select}
       FROM ${table}
       WHERE updated_at > ?
-      LIMIT 1000
+      ORDER BY updated_at
+      LIMIT 50000
       `,
       [this.lastSyncMeta],
     );
@@ -298,71 +290,106 @@ export class SyncService {
   }
 
   public async uploadData(data) {
-    return this.httpService.post(
-      `${process.env.NEUVO_STATS_API}/external/sync/data`,
-      {
+    return axios
+      .post(`${process.env.NEUVO_STATS_API}/external/sync/data`, {
         apiKey: process.env.NEUVO_SECRET,
         name: 'hak',
         data,
-      },
-    ).pipe(
-      catchError((e) => {
-        this.logger.error(e.response?.data);
+      })
+      .then((response) => {
+        this.debugResponse(response);
+        return response.data;
+      })
+      .catch((error) => {
+        this.debugError(error);
         throw 'Error uploading data!';
-      }),
-    );
+      });
   }
 
   public async uploadMeta(data) {
-    return this.httpService.post(
-      `${process.env.NEUVO_STATS_API}/external/sync/meta`,
-      {
+    return axios
+      .post(`${process.env.NEUVO_STATS_API}/external/sync/meta`, {
         apiKey: process.env.NEUVO_SECRET,
         name: 'hak',
         data,
-      },
-    ).pipe(
-      catchError((e) => {
-        this.logger.error(e.response?.data);
+      })
+      .then((response) => {
+        this.debugResponse(response);
+        return response.data;
+      })
+      .catch((error) => {
+        this.debugError(error);
         throw 'Error uploading meta data!';
-      }),
-    );
+      });
   }
 
   public async updateLastSync(type: 'meta' | 'data' = 'meta') {
     this.logger.log('Updating last sync');
-    const { data } = await firstValueFrom(
-      this.httpService
-        .get<any>(`${process.env.NEUVO_STATS_API}/external/sync/last`, { params: { type, name: 'hak' } })
-        .pipe(
-          catchError((e) => {
-            this.logger.error(e.response?.data);
-            throw 'Error fetching last sync dates!';
-          }),
-        ),
-    );
-    this.logger.debug(data);
-    if(type == 'data') {
-      this.lastSyncIncidents = new Date(data.date);
-    } else {
-      this.lastSyncMeta = new Date(data.date);
+    try {
+      const { data } = await axios.get<any>(
+        `${process.env.NEUVO_STATS_API}/external/sync/last`,
+        {
+          params: { type, name: 'hak' },
+        },
+      );
+      this.debugResponse(data);
+      if (type == 'data') {
+        this.lastSyncIncidents = new Date(data.date);
+      } else {
+        this.lastSyncMeta = new Date(data.date);
+      }
+    } catch (error) {
+      this.debugError(error);
+      this.logger.error('Error fetching last sync dates!');
+      throw 'Error fetching last sync dates!';
     }
   }
 
   public async sync() {
-    if (this.syncing) {
-      this.logger.error('Sync already in progress');
-      return;
+    try {
+      if (this.syncing) {
+        this.logger.error('Sync already in progress');
+        return;
+      }
+      this.syncing = true;
+      this.logger.log('Syncing data');
+      await this.updateLastSync('data');
+      const data = await this.getData();
+      await this.uploadData(data);
+      await this.updateLastSync('meta');
+      const meta = await this.getMeta();
+      await this.uploadMeta(meta);
+      this.syncing = false;
+      this.logger.verbose('Done syncing');
+    } catch (e) {
+      this.logger.error(e);
     }
-    this.syncing = true;
-    this.logger.log('Syncing data');
-    await this.updateLastSync('data');
-    const data = await this.getData();
-    await this.uploadData(data);
-    await this.updateLastSync('meta');
-    const meta = await this.getMeta();
-    await this.uploadMeta(meta);
-    this.syncing = false;
-    this.logger.verbose('Done syncing');
+  }
+
+  private debugResponse(response) {
+    try {
+      this.logger.debug('Request URL: ', response.request.responseURL);
+      this.logger.debug('Request Method: ', response.config.method);
+      //this.logger.debug('Request Data: ', response.config.data);
+      this.logger.debug('Request Headers: ', response.config.headers);
+      this.logger.debug('Response Status Code: ', response.status);
+      this.logger.debug('Response Headers: ', response.headers);
+      this.logger.debug('Response Data: ', response.data);
+    } catch (e) {
+      this.logger.error(e);
+    }
+  }
+
+  private debugError(error) {
+    try {
+      this.logger.error('Request Error: ', error);
+      this.logger.error('Request URL: ', error.request.responseURL);
+      this.logger.error('Request Method: ', error.config.method);
+      //this.logger.error('Request Data: ', error.config.data);
+      this.logger.error('Request Headers: ', error.config.headers);
+      this.logger.error('Response Data: ', error.response?.data);
+    } catch (e) {
+      this.logger.error(e);
+    }
   }
 }
