@@ -71,7 +71,7 @@ export class SyncService {
     LEFT JOIN gbv_nature_of_violences ON gbv_nature_of_violences.case_id = gbv_incident_reports.id
     LEFT JOIN gbv_survivor_statuses ON gbv_survivor_statuses.case_id = gbv_incident_reports.id
     LEFT JOIN gbv_survivors_datas ON gbv_survivors_datas.case_id = gbv_incident_reports.id
-    WHERE gbv_incident_reports.updated_at > "2000-01-01 00:00:00"
+    WHERE gbv_incident_reports.updated_at > ?
     GROUP BY
       gbv_nature_of_violences.case_id,
       gbv_survivor_statuses.case_id,
@@ -111,7 +111,7 @@ export class SyncService {
       gbv_survivors_datas.case_id,
       gbv_nature_of_violences.nature_of_violence_id
     ORDER BY gbv_incident_reports.updated_at
-    LIMIT 500
+    LIMIT 5000
       `,
       [this.lastSyncIncidents],
     );
@@ -335,8 +335,10 @@ export class SyncService {
       this.debugResponse(data);
       if (type == 'data') {
         this.lastSyncIncidents = new Date(data.date);
+        this.logger.debug(`Last sync for incidents ${this.lastSyncIncidents}`);
       } else {
         this.lastSyncMeta = new Date(data.date);
+        this.logger.debug(`Last sync for meta data ${this.lastSyncMeta}`);
       }
     } catch (error) {
       this.debugError(error);
@@ -362,16 +364,14 @@ export class SyncService {
       this.syncing = false;
       this.logger.verbose('Done syncing');
     } catch (e) {
+      this.syncing = false;
       this.logger.error(e);
     }
   }
 
   private debugResponse(response) {
     try {
-      this.logger.debug('Request URL: ', response.request.responseURL);
-      this.logger.debug('Request Method: ', response.config.method);
-      //this.logger.debug('Request Data: ', response.config.data);
-      this.logger.debug('Request Headers: ', response.config.headers);
+      //this.logger.debug('Request Data: ', response.config?.data);
       this.logger.debug('Response Status Code: ', response.status);
       this.logger.debug('Response Headers: ', response.headers);
       this.logger.debug('Response Data: ', response.data);
@@ -383,10 +383,8 @@ export class SyncService {
   private debugError(error) {
     try {
       this.logger.error('Request Error: ', error);
-      this.logger.error('Request URL: ', error.request.responseURL);
-      this.logger.error('Request Method: ', error.config.method);
-      //this.logger.error('Request Data: ', error.config.data);
-      this.logger.error('Request Headers: ', error.config.headers);
+      //this.logger.error('Request Data: ', error.config?.data);
+      this.logger.error('Request Headers: ', error.config?.headers);
       this.logger.error('Response Data: ', error.response?.data);
     } catch (e) {
       this.logger.error(e);
